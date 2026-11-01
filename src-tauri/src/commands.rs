@@ -12,6 +12,14 @@ pub fn app_ready(app: AppHandle) {
     window::reveal_once(&app);
 }
 
+/// Quits Mixdeck (same as the tray's "Quit Mixdeck"). The engine and sessions workers shut
+/// down in the `RunEvent::Exit` handler.
+#[tauri::command]
+pub fn quit_app(app: AppHandle) {
+    log::info!("quit requested from the window");
+    app.exit(0);
+}
+
 #[tauri::command]
 pub fn get_settings(state: State<'_, SettingsState>) -> Result<Settings, String> {
     state.get().map_err(|e| e.to_string())

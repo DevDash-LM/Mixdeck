@@ -3,7 +3,7 @@ import type { AppsSettings } from "./AppsSettings";
 import type { Hotkey } from "./Hotkey";
 
 /**
- * Persisted user settings (PLAN.md §3). Unknown/missing fields fall back to defaults, so
+ * Persisted user settings. Unknown/missing fields fall back to defaults, so
  * adding a field later never breaks an existing settings file.
  */
 export type Settings = { 
@@ -24,12 +24,18 @@ launchAtLogin: boolean,
  */
 meterMode: number, hotkeys: Array<Hotkey>, 
 /**
- * Settings › Apps (REDESIGN Phase 13): app sessions on/off, system sounds, icon look,
+ * Settings › Apps: app sessions on/off, system sounds, icon look,
  * endpoint overrides.
  */
 apps: AppsSettings, 
 /**
- * Input strips shown as a 36px rail on the Mixer (REDESIGN Phase 15, feature 22).
+ * Input strips shown as a 36px rail on the Mixer.
  * Strip indices 0–7, sorted, no duplicates.
  */
-collapsedStrips: Array<number>, };
+collapsedStrips: Array<number>, 
+/**
+ * Local display names for apps (Mixdeck only; Windows and Voicemeeter never see them).
+ * Key: the app's identity (`exe:<lower-case path>`, `name:<name>` or `system`, built by the
+ * frontend), value: the name to show. Trimmed, never empty.
+ */
+appLabels: { [key in string]: string }, };

@@ -1,6 +1,7 @@
 //! App settings: the `Settings` struct, its patch type, and persistence through
 //! `tauri-plugin-store` (`settings.json` in the app-data folder, key `settings`).
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,12 @@ use crate::sessions::AppsSettings;
 use crate::vmr::layout::STRIPS;
 
 pub const STORE_FILE: &str = "settings.json";
+/// Most app renames kept (`Settings.app_labels`).
+pub const MAX_APP_LABELS: usize = 256;
+/// Longest app rename, in characters.
+pub const MAX_APP_LABEL_LEN: usize = 64;
+/// Longest app identity key (an exe path or name), in characters.
+const MAX_APP_KEY_LEN: usize = 1024;
 const STORE_KEY: &str = "settings";
 
 #[derive(Debug, thiserror::Error)]
@@ -31,6 +38,10 @@ pub enum SettingsError {
     TooManyHotkeys(usize),
     #[error("Apps: {0}")]
     InvalidApps(String),
+    #[error("You can rename up to {0} apps.")]
+    TooManyAppLabels(usize),
+    #[error("App names can be at most {0} characters.")]
+    AppLabelTooLong(usize),
     #[error("There's no input strip {0} to collapse.")]
     InvalidCollapsedStrip(u8),
     #[error("Settings are temporarily unavailable. Try again.")]
@@ -88,6 +99,10 @@ pub struct Settings {
     /// Input strips shown as a 36px rail on the Mixer.
     /// Strip indices 0–7, sorted, no duplicates.
     pub collapsed_strips: Vec<u8>,
+    /// Local display names for apps (Mixdeck only; Windows and Voicemeeter never see them).
+    /// Key: the app's identity (`exe:<lower-case path>`, `name:<name>` or `system`, built by the
+    /// frontend), value: the name to show. Trimmed, never empty.
+    pub app_labels: BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -100,6 +115,7 @@ impl Default for Settings {
             hotkeys: Vec::new(),
             apps: AppsSettings::default(),
             collapsed_strips: Vec::new(),
+            app_labels: BTreeMap::new(),
         }
     }
 }
@@ -125,6 +141,9 @@ pub struct SettingsPatch {
     /// Replaces the whole list (sorted and de-duplicated on save).
     #[ts(optional)]
     pub collapsed_strips: Option<Vec<u8>>,
+    /// Replaces the whole map (labels are trimmed; empty ones are dropped).
+    #[ts(optional)]
+    pub app_labels: Option<BTreeMap<String, String>>,
 }
 
 impl Settings {
@@ -152,6 +171,9 @@ impl Settings {
         if let Some(v) = patch.collapsed_strips {
             next.collapsed_strips = normalize_collapsed(v);
         }
+        if let Some(v) = patch.app_labels {
+            next.app_labels = normalize_app_labels(v);
+        }
         next.validate()?;
         Ok(next)
     }
@@ -172,6 +194,16 @@ impl Settings {
         {
             return Err(SettingsError::InvalidCollapsedStrip(bad));
         }
+        if self.app_labels.len() > MAX_APP_LABELS {
+            return Err(SettingsError::TooManyAppLabels(MAX_APP_LABELS));
+        }
+        if self
+            .app_labels
+            .values()
+            .any(|v| v.chars().count() > MAX_APP_LABEL_LEN)
+        {
+            return Err(SettingsError::AppLabelTooLong(MAX_APP_LABEL_LEN));
+        }
         for (i, h) in self.hotkeys.iter().enumerate() {
             h.action
                 .validate()
@@ -182,6 +214,17 @@ impl Settings {
         }
         Ok(())
     }
+}
+
+/// Trims labels and drops empty ones and over-long keys.
+fn normalize_app_labels(v: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    v.into_iter()
+        .filter(|(k, _)| !k.is_empty() && k.chars().count() <= MAX_APP_KEY_LEN)
+        .filter_map(|(k, label)| {
+            let label = label.trim();
+            (!label.is_empty()).then(|| (k, label.to_owned()))
+        })
+        .collect()
 }
 
 /// Sorted, de-duplicated collapsed-strip list.
@@ -235,6 +278,11 @@ pub fn load<R: Runtime>(app: &AppHandle<R>) -> Settings {
                 }
                 s.collapsed_strips.retain(|&i| usize::from(i) < STRIPS);
                 s.collapsed_strips = normalize_collapsed(std::mem::take(&mut s.collapsed_strips));
+                s.app_labels = normalize_app_labels(std::mem::take(&mut s.app_labels))
+                    .into_iter()
+                    .filter(|(_, l)| l.chars().count() <= MAX_APP_LABEL_LEN)
+                    .take(MAX_APP_LABELS)
+                    .collect();
                 s
             }
             Err(e) => {
@@ -365,5 +413,33 @@ mod tests {
         let v = serde_json::to_value(Settings::default()).unwrap();
         assert!(v.get("closeToTray").is_some());
         assert!(v.get("close_to_tray").is_none());
+    }
+
+    #[test]
+    fn app_labels_are_trimmed_and_validated() {
+        let mut labels = BTreeMap::new();
+        labels.insert("exe:c:/a.exe".to_owned(), "  Browser".to_owned());
+        labels.insert("name:Spotify".to_owned(), "   ".to_owned());
+        labels.insert(String::new(), "x".to_owned());
+        let s = Settings::default()
+            .patched(SettingsPatch {
+                app_labels: Some(labels),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(s.app_labels.len(), 1);
+        assert_eq!(s.app_labels.get("exe:c:/a.exe").map(String::as_str), Some("Browser"));
+
+        let mut long = BTreeMap::new();
+        long.insert("system".to_owned(), "x".repeat(MAX_APP_LABEL_LEN + 1));
+        assert!(Settings::default()
+            .patched(SettingsPatch {
+                app_labels: Some(long),
+                ..Default::default()
+            })
+            .is_err());
+
+        let old: Settings = serde_json::from_str(r#"{"startMinimized":true}"#).unwrap();
+        assert!(old.app_labels.is_empty());
     }
 }

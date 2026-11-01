@@ -2,6 +2,6 @@
 import type { Target } from "./Target";
 
 /**
- * What a hotkey does (PLAN.md §7 Phase 8).
+ * What a hotkey does.
  */
 export type HotkeyAction = { "kind": "toggleWindow" } | { "kind": "toggleMute", target: Target, } | { "kind": "gain", target: Target, delta: number, } | { "kind": "loadPreset", id: string, };

@@ -20,10 +20,24 @@ export const STRIP_ROWS = `${STRIP_ZONES.header}px ${STRIP_ZONES.source}px ${STR
  * Virtual strips with an Apps zone: Apps takes the flex space and the fader
  * zone is fixed at its minimum, so it's visibly shorter than the HW faders (by design).
  */
-export const VIRTUAL_STRIP_ROWS = `${STRIP_ZONES.header}px ${STRIP_ZONES.source}px ${STRIP_ZONES.knobs}px minmax(0, 1fr) ${STRIP_ZONES.fader}px ${STRIP_ZONES.footer}px`;
+export const virtualStripRows = (fader: number = STRIP_ZONES.fader) =>
+  `${STRIP_ZONES.header}px ${STRIP_ZONES.source}px ${STRIP_ZONES.knobs}px minmax(0, 1fr) ${fader}px ${STRIP_ZONES.footer}px`;
+export const VIRTUAL_STRIP_ROWS = virtualStripRows();
 
 /** One app row in the Apps zone (icon/name/mute line + volume slider). Rows are 4px apart. */
 export const APPS_ROW = 44;
+
+/**
+ * Smallest Apps zone the fader splitter may leave: three full app rows (+2 gaps, 4px list
+ * padding top and bottom, the 20px "Windows mixer" link and the zone's 1px border).
+ */
+export const APPS_MIN_H = 3 * APPS_ROW + 2 * 4 + 8 + 20 + 1;
+
+/** Fixed zones of a virtual strip around the two flexible ones (Apps, Fader). */
+export const STRIP_FIXED_H = STRIP_ZONES.header + STRIP_ZONES.source + STRIP_ZONES.knobs + STRIP_ZONES.footer;
+
+/** Narrowest a resized Master column may get. */
+export const MASTER_MIN = 320;
 
 /** Width clamp (`--strip-min` / `--strip-max`) and the board's gaps. */
 export const STRIP_MIN = 108;

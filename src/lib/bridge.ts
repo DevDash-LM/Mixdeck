@@ -78,6 +78,8 @@ export function errorMessage(err: unknown): string {
 export const bridge = {
   /** Tell Rust the first frame is painted so it can show the window. */
   appReady: (): Promise<void> => invoke("app_ready"),
+  /** Quits Mixdeck (like the tray's "Quit Mixdeck"). */
+  quitApp: (): Promise<void> => invoke("quit_app"),
   getSettings: (): Promise<Settings> => invoke<Settings>("get_settings"),
   setSettings: (patch: SettingsPatch): Promise<Settings> =>
     invoke<Settings>("set_settings", { patch }),

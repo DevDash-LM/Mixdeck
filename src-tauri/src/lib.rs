@@ -115,6 +115,7 @@ pub fn run() {
         .on_window_event(window::on_window_event)
         .invoke_handler(tauri::generate_handler![
             commands::app_ready,
+            commands::quit_app,
             commands::get_settings,
             commands::set_settings,
             commands::set_param,

@@ -13,4 +13,8 @@ apps?: AppsSettings,
 /**
  * Replaces the whole list (sorted and de-duplicated on save).
  */
-collapsedStrips?: Array<number>, };
+collapsedStrips?: Array<number>, 
+/**
+ * Replaces the whole map (labels are trimmed; empty ones are dropped).
+ */
+appLabels?: { [key in string]: string }, };

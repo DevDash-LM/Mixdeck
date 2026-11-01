@@ -4,13 +4,14 @@
  * not) with Re-scan.
  */
 import { useState } from "react";
-import { RotateCw } from "lucide-react";
-import { Button, Skeleton, Toggle } from "@/components/ui";
+import { RotateCcw, RotateCw } from "lucide-react";
+import { Button, IconButton, Skeleton, Toggle } from "@/components/ui";
 import { inTauri, type AppsSettings, type EndpointApps, type SessionTarget } from "@/lib/bridge";
 import { cn } from "@/lib/cn";
 import { busName, stripDefaultName } from "@/features/mixer/labels";
 import type { SettingsSectionProps } from "@/features/settings/sections";
 import { useSessionsStore } from "@/stores/sessionsStore";
+import { describeAppLabelKey, setAppLabel } from "./appLabels";
 import { appCount, rescanApps } from "./useApps";
 
 const TARGETS: SessionTarget[] = [
@@ -110,6 +111,44 @@ function MappingStatus({ rules }: { rules: AppsSettings["endpointRules"] }) {
   );
 }
 
+/** Local app renames, each with a reset. Renaming itself happens on the strip (double-click). */
+function RenamedApps({ labels }: { labels: Record<string, string> }) {
+  const entries = Object.entries(labels);
+  return (
+    <div className="flex flex-col gap-2 py-3">
+      <div className="flex flex-col gap-0.5">
+        <span className="text-13 text-text">Renamed apps</span>
+        <span className="text-12 text-text-dim">
+          Double-click an app's name on a strip to rename it. Names are kept in Mixdeck only; Windows
+          and Voicemeeter don't see them.
+        </span>
+      </div>
+      {entries.length === 0 ? (
+        <p className="text-12 text-text-faint">No apps renamed yet.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {entries.map(([key, label]) => {
+            const original = describeAppLabelKey(key);
+            return (
+              <li key={key} className="flex h-8 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate text-12 text-text" title={key}>
+                  {label} <span className="text-text-faint">· {original}</span>
+                </span>
+                <IconButton
+                  size="sm"
+                  label={`Reset the name of ${original}`}
+                  icon={<RotateCcw size={14} strokeWidth={1.5} />}
+                  onClick={() => void setAppLabel(key, "")}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function AppsSection({ settings, update }: SettingsSectionProps) {
   const apps = settings.apps;
   const set = (patch: Partial<AppsSettings>) => {
@@ -150,6 +189,7 @@ export default function AppsSection({ settings, update }: SettingsSectionProps) 
         disabled={off}
         onCheckedChange={(v) => set({ monochromeIcons: v })}
       />
+      <RenamedApps labels={settings.appLabels} />
       <MappingStatus rules={apps.endpointRules} />
     </div>
   );

@@ -17,6 +17,7 @@ import {
 } from "@/lib/bridge";
 import { useSessions, useSessionsStore } from "@/stores/sessionsStore";
 import { useSettings } from "@/stores/settingsStore";
+import { appLabelKey, useAppLabels } from "./appLabels";
 
 /** Same as the Rust default (`AppsSettings::default`), used until Settings has loaded. */
 export const DEFAULT_APPS_SETTINGS: AppsSettings = {
@@ -37,6 +38,14 @@ export function useAppsSettings(): AppsSettings {
   return apps ?? DEFAULT_APPS_SETTINGS;
 }
 
+/** An app as the UI shows it: `name` is the local rename if there is one, else Windows' name. */
+export type AppItem = AppSession & {
+  /** Windows' name for the app (what `name` would be without a rename). */
+  defaultName: string;
+  /** Key into `Settings.appLabels`. */
+  labelKey: string;
+};
+
 export type AppsView =
   /** Apps turned off in Settings, or there's no backend (plain browser tab). Render nothing / a quiet note. */
   | { kind: "off" }
@@ -45,8 +54,8 @@ export type AppsView =
   | { kind: "error"; message: string }
   /** No active Windows endpoint matched this target. */
   | { kind: "missing"; ep: EndpointApps | undefined }
-  /** `apps` is filtered by the Settings toggles and sorted by name (stable while dragging). */
-  | { kind: "ready"; ep: EndpointApps; apps: AppSession[] };
+  /** `apps` is filtered by the Settings toggles, renamed, and sorted by name (stable while dragging). */
+  | { kind: "ready"; ep: EndpointApps; apps: AppItem[] };
 
 const byName = (a: AppSession, b: AppSession) =>
   a.name.localeCompare(b.name, undefined, { sensitivity: "base" }) || a.key.localeCompare(b.key);
@@ -59,6 +68,7 @@ export function useAppsView(target: SessionTarget): AppsView {
   const stateError = useSessionsStore((s) => s.state?.error ?? null);
   const ep = useSessions(target);
   const showInactive = settings.showInactive;
+  const labels = useAppLabels();
 
   return useMemo<AppsView>(() => {
     if (!inTauri || !settings.enabled || status === "disabled") return { kind: "off" };
@@ -66,9 +76,14 @@ export function useAppsView(target: SessionTarget): AppsView {
     if (status === "unavailable") return { kind: "error", message: stateError ?? "Windows audio isn't responding." };
     if (status !== "ready") return { kind: "loading" };
     if (!ep || !ep.found) return { kind: "missing", ep };
-    const apps = (showInactive ? [...ep.apps] : ep.apps.filter((a) => a.active)).sort(byName);
+    const apps = (showInactive ? ep.apps : ep.apps.filter((a) => a.active))
+      .map((a): AppItem => {
+        const labelKey = appLabelKey(a);
+        return { ...a, name: labels[labelKey] ?? a.name, defaultName: a.name, labelKey };
+      })
+      .sort(byName);
     return { kind: "ready", ep, apps };
-  }, [settings.enabled, status, bridgeStatus, bridgeError, stateError, ep, showInactive]);
+  }, [settings.enabled, status, bridgeStatus, bridgeError, stateError, ep, showInactive, labels]);
 }
 
 /** Re-scan (also retries Windows audio / the bridge after a failure). Toasts on failure. */

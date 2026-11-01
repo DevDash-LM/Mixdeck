@@ -45,9 +45,10 @@ export function EditableLabel({
   name: string;
   /**
    * "title" = card header (12px medium); "header" = v2 strip header (14px medium); "row" = bus row
-   * label (13px medium, 22px tall, max 96px); "sub" = a quieter second line (11px).
+   * label (13px medium, 22px tall, max 96px); "sub" = a quieter second line (11px); "app" = an app
+   * name in a strip's Apps zone (12px, fills the row).
    */
-  variant?: "title" | "header" | "row" | "sub";
+  variant?: "title" | "header" | "row" | "sub" | "app";
   editing: boolean;
   onEditingChange: (editing: boolean) => void;
   onCommit: (label: string) => void;
@@ -92,7 +93,9 @@ export function EditableLabel({
               ? "h-7 text-14"
               : variant === "row"
                 ? "h-[22px] text-13"
-                : "h-4 text-11 leading-none",
+                : variant === "app"
+                  ? "h-[22px] text-12"
+                  : "h-4 text-11 leading-none",
         )}
       />
     );
@@ -118,7 +121,9 @@ export function EditableLabel({
             ? "h-7 flex-1 px-1.5 text-14 font-medium text-text"
             : variant === "row"
               ? "h-[22px] max-w-24 shrink text-13 font-medium text-text"
-              : "h-4 w-full shrink-0 text-11 leading-none text-text-dim",
+              : variant === "app"
+                ? "h-[22px] flex-1 px-0.5 text-12 leading-4 text-text"
+                : "h-4 w-full shrink-0 text-11 leading-none text-text-dim",
       )}
     >
       <span className="truncate">{shown}</span>

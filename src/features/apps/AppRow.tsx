@@ -5,15 +5,15 @@
  * The live dot and peak bar are drawn in the shared meter rAF loop from `appLevels`, never through
  * React state. Inactive sessions sit at 40 % until hovered or focused.
  */
-import { memo, useEffect, useRef, type RefObject } from "react";
+import { memo, useEffect, useRef, useState, type RefObject } from "react";
 import { Volume2, VolumeX } from "lucide-react";
 import { addMeterDraw, ToggleChip, useContinuous } from "@/components/mixer";
-import { Tooltip } from "@/components/ui";
-import type { AppSession } from "@/lib/bridge";
+import { EditableLabel } from "@/features/mixer/parts";
 import { cn } from "@/lib/cn";
 import { appLevels, useSessionsStore } from "@/stores/sessionsStore";
 import { AppIcon } from "./AppIcon";
-import { LIVE_THRESHOLD } from "./useApps";
+import { setAppLabel } from "./appLabels";
+import { LIVE_THRESHOLD, type AppItem } from "./useApps";
 
 /** Peak bar range: −60 dB … 0 dB. */
 const FLOOR_DB = -60;
@@ -51,7 +51,7 @@ function useAppPeak(key: string) {
   return { dot, bar };
 }
 
-function VolumeSlider({ app, barRef }: { app: AppSession; barRef: RefObject<HTMLSpanElement | null> }) {
+function VolumeSlider({ app, barRef }: { app: AppItem; barRef: RefObject<HTMLSpanElement | null> }) {
   const pct = Math.round(app.volume * 100);
   const rail = useRef<HTMLDivElement>(null);
   const c = useContinuous({
@@ -120,12 +120,14 @@ function VolumeSlider({ app, barRef }: { app: AppSession; barRef: RefObject<HTML
 }
 
 export interface AppRowProps {
-  app: AppSession;
+  app: AppItem;
 }
 
 function AppRowImpl({ app }: AppRowProps) {
   const { dot, bar } = useAppPeak(app.key);
   const setMute = (muted: boolean) => void useSessionsStore.getState().setAppMute(app.key, muted);
+  const [renaming, setRenaming] = useState(false);
+  const renamed = app.name !== app.defaultName;
 
   return (
     <li
@@ -147,9 +149,17 @@ function AppRowImpl({ app }: AppRowProps) {
             style={{ opacity: 0 }}
           />
         </span>
-        <Tooltip content={app.name}>
-          <span className="min-w-0 flex-1 truncate text-12 leading-4 text-text">{app.name}</span>
-        </Tooltip>
+        <div className="flex min-w-0 flex-1">
+          <EditableLabel
+            variant="app"
+            value={renamed ? app.name : ""}
+            fallback={app.defaultName}
+            name={app.defaultName}
+            editing={renaming}
+            onEditingChange={setRenaming}
+            onCommit={(label) => void setAppLabel(app.labelKey, label === app.defaultName ? "" : label)}
+          />
+        </div>
         <ToggleChip
           size="sm"
           tone="mute"
@@ -167,10 +177,12 @@ function AppRowImpl({ app }: AppRowProps) {
   );
 }
 
-const sameApp = (a: AppSession, b: AppSession) =>
+const sameApp = (a: AppItem, b: AppItem) =>
   a === b ||
   (a.key === b.key &&
     a.name === b.name &&
+    a.defaultName === b.defaultName &&
+    a.labelKey === b.labelKey &&
     a.icon === b.icon &&
     a.active === b.active &&
     a.volume === b.volume &&

@@ -3,7 +3,7 @@ import type { ParamValue } from "./ParamValue";
 import type { VmEdition } from "./VmEdition";
 
 /**
- * The file format (PLAN.md §3).
+ * The file format.
  */
 export type Preset = { schema: number, name: string, 
 /**

@@ -14,11 +14,11 @@ enabled: boolean,
  */
 showSystemSounds: boolean, 
 /**
- * RD5: draw app icons in greyscale (UI only).
+ * Draw app icons in greyscale (UI only).
  */
 monochromeIcons: boolean, 
 /**
- * List sessions that aren't playing/recording right now, dimmed (UI only; REDESIGN Phase 14).
+ * List sessions that aren't playing/recording right now, dimmed (UI only).
  */
 showInactive: boolean, 
 /**

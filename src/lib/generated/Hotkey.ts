@@ -2,7 +2,7 @@
 import type { HotkeyAction } from "./HotkeyAction";
 
 /**
- * A global hotkey binding (Phase 8). `accelerator` is a `global-hotkey` string such as
+ * A global hotkey binding. `accelerator` is a `global-hotkey` string such as
  * `"Control+Shift+KeyM"`; empty means "not recorded yet" (kept, but not registered).
  */
 export type Hotkey = { accelerator: string, action: HotkeyAction, };

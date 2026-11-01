@@ -6,18 +6,26 @@
  * horizontally (a vertical wheel over empty board space scrolls them sideways).
  * Master: eight horizontal bus rows in two sub-groups (A1–A5, B1–B3) that flex
  * 68–104px tall, so all of them fit without scrolling from about 1440×800 up.
+ *
+ * The two rules are splitters (`panelLayout.ts`): dragging one resizes the panels either side of
+ * it, and from then on the board uses the dragged widths (each input group scrolls its strips
+ * sideways, snapping one to the centre, when it's narrower than its strips). A group can't get
+ * narrower than one full strip, Master than `MASTER_MIN`. Double-click a splitter to reset.
  */
-import { Fragment, useRef, type ReactNode, type WheelEvent } from "react";
-import { SectionHeader } from "@/components/mixer";
+import { Fragment, useRef, type ReactNode, type Ref, type WheelEvent } from "react";
+import { SectionHeader, useElementSize } from "@/components/mixer";
 import { Skeleton } from "@/components/ui";
 import { useAppsSettings } from "@/features/apps/useApps";
 import { ConnectionGate } from "@/features/connection/ConnectionGate";
+import type { MixerState } from "@/lib/bridge";
 import { cn } from "@/lib/cn";
 import { BUS_NAMES, HW_STRIPS, PHYS_BUSES } from "@/lib/params";
 import { useMixer } from "@/stores/mixerStore";
 import { BusCard } from "./BusCard";
 import { setStripCollapsed, useCollapsedStrips, useSettingsSettled } from "./collapse";
 import { useMixerKeyboard } from "./keyboard";
+import { clamp, usePanelLayout } from "./panelLayout";
+import { Splitter } from "./Splitter";
 import { CollapsedRail } from "./strip/CollapsedRail";
 import { MASTER_WIDTH, ROW, SUBGROUP, subgroupStyle } from "./bus/layout";
 import { getDevicePicker, getMixerActions, getStripApps, listMixerOverlays } from "./extensions";
@@ -27,6 +35,7 @@ import {
   GROUP_GAP,
   HEADER_BLOCK,
   MASTER_GAP,
+  MASTER_MIN,
   STRIP_GAP,
   STRIP_MAX,
   STRIP_MIN,
@@ -58,14 +67,59 @@ function groupStyle(open: number, rails: number) {
 const inputsMin = (hwRails: number, virtRails: number) =>
   mixedGroupWidth(HW_STRIPS - hwRails, hwRails, STRIP_MIN) + GROUP_GAP + mixedGroupWidth(VIRT_STRIPS - virtRails, virtRails, STRIP_MIN);
 
-/** One input group: header + a row of strips. Grows in proportion to its open strip count. */
-function InputGroup({ title, n, rails, children }: { title: string; n: number; rails: number; children: ReactNode }) {
+/** Narrowest a resized group may get: one full strip (or its rails, if every strip is collapsed). */
+const groupMin = (open: number, rails: number) => (open > 0 ? STRIP_MIN : mixedGroupWidth(0, rails, STRIP_MIN));
+
+interface PanelWidths {
+  hw: number;
+  virt: number;
+  master: number;
+}
+
+/**
+ * One input group: header + a row of strips. Default: grows in proportion to its open strip
+ * count. With `width` (user-resized): exactly that wide, strips share it (≥ 108px each) and
+ * scroll sideways, snapping one to the centre, when they don't fit.
+ */
+function InputGroup({
+  title,
+  n,
+  rails,
+  width,
+  ref,
+  children,
+}: {
+  title: string;
+  n: number;
+  rails: number;
+  width?: number;
+  ref?: Ref<HTMLDivElement>;
+  children: ReactNode;
+}) {
+  const open = n - rails;
   return (
-    <div role="group" aria-label={title} className="flex h-full min-h-0 flex-col gap-2" style={groupStyle(n - rails, rails)}>
+    <div
+      ref={ref}
+      role="group"
+      aria-label={title}
+      className="flex h-full min-h-0 flex-col gap-2"
+      style={width === undefined ? groupStyle(open, rails) : { flex: `0 0 ${width}px`, width, minWidth: 0 }}
+    >
       <SectionHeader title={title} count={n} />
-      <div className="flex min-h-0 flex-1" style={{ gap: STRIP_GAP }}>
-        {children}
-      </div>
+      {width === undefined ? (
+        <div className="flex min-h-0 flex-1" style={{ gap: STRIP_GAP }}>
+          {children}
+        </div>
+      ) : (
+        <div
+          className="min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overflow-y-hidden [scrollbar-width:thin]"
+          onWheel={sideScroll}
+        >
+          <div className="flex h-full [&>*]:snap-center" style={{ gap: STRIP_GAP, minWidth: mixedGroupWidth(open, rails, STRIP_MIN) }}>
+            {children}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -88,10 +142,20 @@ function sideScroll(e: WheelEvent<HTMLDivElement>) {
 
 function MixerBoard() {
   const state = useMixer((s) => s.state);
+  return state ? <Board state={state} /> : null;
+}
+
+function Board({ state }: { state: MixerState }) {
   const collapsed = useCollapsedStrips();
   const boardRef = useRef<HTMLDivElement>(null);
-  useMixerKeyboard(boardRef, state !== null);
-  if (!state) return null;
+  useMixerKeyboard(boardRef, true);
+  const split = usePanelLayout((s) => s.split);
+  // Mounted with the board, so the ResizeObserver sees the row from the first layout.
+  const [rowRef, rowSize] = useElementSize<HTMLDivElement>();
+  const hwRef = useRef<HTMLDivElement>(null);
+  const virtRef = useRef<HTMLDivElement>(null);
+  const masterRef = useRef<HTMLElement>(null);
+  const dragFrom = useRef<PanelWidths | null>(null);
   const actions = getMixerActions();
   const stripPicker = getDevicePicker("strip");
   const busPicker = getDevicePicker("bus");
@@ -103,6 +167,61 @@ function MixerBoard() {
   const isCollapsed = (i: number) => collapsed.includes(i);
   const hwRails = hw.filter((s) => isCollapsed(s.index)).length;
   const virtRails = virt.filter((s) => isCollapsed(s.index)).length;
+
+  // Width the three panels share (the row's content box minus the two gaps).
+  const total = rowSize.width - GROUP_GAP - MASTER_GAP;
+  const mins: PanelWidths = {
+    hw: groupMin(hw.length - hwRails, hwRails),
+    virt: groupMin(virt.length - virtRails, virtRails),
+    master: MASTER_MIN,
+  };
+  let sizes: PanelWidths | null = null;
+  if (split && total > 0) {
+    const master = clamp(split.master * total, mins.master, total - mins.hw - mins.virt);
+    const hwW = clamp(split.hw * total, mins.hw, total - master - mins.virt);
+    sizes = { hw: hwW, master, virt: Math.max(mins.virt, total - master - hwW) };
+  }
+
+  /** Widths at drag start: the resized ones, or the default layout's as measured (spare margin split between the input groups). */
+  const startDrag = () => {
+    if (sizes) {
+      dragFrom.current = sizes;
+      return;
+    }
+    const h = hwRef.current?.offsetWidth ?? mins.hw;
+    const v = virtRef.current?.offsetWidth ?? mins.virt;
+    const m = masterRef.current?.offsetWidth ?? mins.master;
+    const spare = Math.max(0, total - h - v - m);
+    dragFrom.current = { hw: h + (spare * h) / (h + v), virt: v + (spare * v) / (h + v), master: m };
+  };
+  const setWidths = (hwW: number, master: number) => {
+    if (total > 0) usePanelLayout.getState().setSplit({ hw: hwW / total, master: master / total }, false);
+  };
+  const dragInputs = (d: number) => {
+    const f = dragFrom.current;
+    if (f) setWidths(clamp(f.hw + d, mins.hw, f.hw + f.virt - mins.virt), f.master);
+  };
+  const dragMaster = (d: number) => {
+    const f = dragFrom.current;
+    if (f) setWidths(f.hw, clamp(f.master - d, mins.master, f.master + f.virt - mins.virt));
+  };
+  const endDrag = () => {
+    dragFrom.current = null;
+    usePanelLayout.getState().persist();
+  };
+  const resetSplit = () => usePanelLayout.getState().setSplit(null);
+  const inputsSplitter = (
+    <Splitter
+      axis="x"
+      label="Resize Hardware inputs and Virtual inputs"
+      value={sizes?.hw}
+      style={{ width: GROUP_GAP }}
+      onStart={startDrag}
+      onDrag={dragInputs}
+      onEnd={endDrag}
+      onReset={resetSplit}
+    />
+  );
 
   const strip = (s: (typeof state.strips)[number]) =>
     isCollapsed(s.index) ? (
@@ -121,20 +240,56 @@ function MixerBoard() {
 
   return (
     <div ref={boardRef} className="relative h-full overflow-y-auto">
-      <div className="flex h-full" style={{ minHeight: BOARD_MIN_H, padding: BOARD_PAD }}>
-        <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden" onWheel={sideScroll}>
-          <div className="flex h-full justify-center" style={{ minWidth: inputsMin(hwRails, virtRails) }}>
-            <InputGroup title="Hardware inputs" n={hw.length} rails={hwRails}>
+      <div
+        ref={rowRef}
+        className="flex h-full"
+        style={{
+          minHeight: BOARD_MIN_H,
+          padding: BOARD_PAD,
+          // Resized: below the panels' minimums the whole board scrolls sideways.
+          minWidth: sizes ? mins.hw + mins.virt + mins.master + GROUP_GAP + MASTER_GAP + BOARD_PAD * 2 : undefined,
+        }}
+      >
+        {sizes ? (
+          <>
+            <InputGroup ref={hwRef} title="Hardware inputs" n={hw.length} rails={hwRails} width={sizes.hw}>
               {hw.map(strip)}
             </InputGroup>
-            <Rule width={GROUP_GAP} />
-            <InputGroup title="Virtual inputs" n={virt.length} rails={virtRails}>
+            {inputsSplitter}
+            <InputGroup ref={virtRef} title="Virtual inputs" n={virt.length} rails={virtRails} width={sizes.virt}>
               {virt.map(strip)}
             </InputGroup>
+          </>
+        ) : (
+          <div className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden" onWheel={sideScroll}>
+            <div className="flex h-full justify-center" style={{ minWidth: inputsMin(hwRails, virtRails) }}>
+              <InputGroup ref={hwRef} title="Hardware inputs" n={hw.length} rails={hwRails}>
+                {hw.map(strip)}
+              </InputGroup>
+              {inputsSplitter}
+              <InputGroup ref={virtRef} title="Virtual inputs" n={virt.length} rails={virtRails}>
+                {virt.map(strip)}
+              </InputGroup>
+            </div>
           </div>
-        </div>
-        <Rule width={MASTER_GAP} strong />
-        <section aria-label="Master" className="flex h-full shrink-0 flex-col gap-2" style={{ width: MASTER_WIDTH }}>
+        )}
+        <Splitter
+          axis="x"
+          strong
+          label="Resize Virtual inputs and Master"
+          value={sizes?.master}
+          style={{ width: MASTER_GAP }}
+          onStart={startDrag}
+          onDrag={dragMaster}
+          onEnd={endDrag}
+          onReset={resetSplit}
+        />
+        <section
+          ref={masterRef}
+          aria-label="Master"
+          className="flex h-full shrink-0 flex-col gap-2"
+          style={{ width: sizes ? sizes.master : MASTER_WIDTH }}
+        >
           <SectionHeader title="Master" count={`${BUS_NAMES.length} buses`} />
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto" style={{ gap: SUBGROUP.spacing }}>
             <BusGroup title={`Physical · ${BUS_NAMES[0]}–${BUS_NAMES[PHYS_BUSES - 1]}`} n={phys.length}>

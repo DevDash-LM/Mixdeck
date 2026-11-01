@@ -1,13 +1,13 @@
 /**
  * Input strip v2. Five fixed zones, top → bottom:
  *   Header 40 · Source 64 · Knobs 78 · Fader (flex) · Footer 72
- * Virtual strips with a registered `StripApps` add an Apps zone (flex) above a 230px fader; when
+ * Virtual strips with a registered `StripApps` add an Apps zone (flex) above a fader that is 230px by default and drag-resizable (`panelLayout.ts`); when
  * that component renders nothing, CSS (`:has`) drops back to the 5-zone grid.
  * so zone borders line up across every strip on the board. Width 108–168px (set by the board);
  * density follows the card's own width (a ResizeObserver for props, `@container` for captions).
  * Writes go through `useMixer().setParam` with names from `lib/params.ts`.
  */
-import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
+import { memo, useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Fader, faderInset, Knob, Meter, useElementSize } from "@/components/mixer";
 import type { Strip } from "@/lib/bridge";
 import { cn } from "@/lib/cn";
@@ -17,7 +17,9 @@ import { useMixer } from "@/stores/mixerStore";
 import { getStripApps, type DevicePicker, type StripFxTab } from "../extensions";
 import { HW_KNOB_CAPTIONS, VIRTUAL_EQ_CAPTIONS, VIRTUAL_EQ_HINT, stripDefaultName, stripName } from "../labels";
 import { CardMenu, EditableLabel } from "../parts";
-import { DENSITY, STRIP_ROWS, VIRTUAL_STRIP_ROWS } from "./layout";
+import { clamp, usePanelLayout } from "../panelLayout";
+import { Splitter } from "../Splitter";
+import { APPS_MIN_H, DENSITY, STRIP_FIXED_H, STRIP_ROWS, STRIP_ZONES, virtualStripRows } from "./layout";
 import { RouteColumn } from "./RouteColumn";
 import { SourceCard } from "./SourceCard";
 import { StripFooter } from "./StripFooter";
@@ -67,10 +69,16 @@ function InputStripImpl({ strip: s, onOpenFx, onEditRouting, DevicePicker, onCol
   const onRoute = useCallback((j: number, on: boolean) => set(p.route(j), bool(on)), [p]);
   const openFx = onOpenFx ? (tab?: StripFxTab) => onOpenFx(i, tab) : undefined;
   const Apps = hw ? undefined : getStripApps("virtual");
+  // Fader zone height under an Apps zone: user-dragged (shared by all virtual strips), at least
+  // 230px, and never so tall that fewer than three app rows fit above it.
+  const faderPref = usePanelLayout((st) => st.virtFader);
+  const faderMax = size.height - STRIP_FIXED_H - APPS_MIN_H;
+  const faderH = clamp(faderPref ?? STRIP_ZONES.fader, STRIP_ZONES.fader, faderMax);
+  const dragFrom = useRef(faderH);
   // With an Apps slot the rows come from CSS vars, so `:has()` can pick the 6-zone grid only when
   // the slot actually rendered something. HW strips keep the plain inline rows.
   const gridStyle: CSSProperties = Apps
-    ? ({ "--rows-5": STRIP_ROWS, "--rows-6": VIRTUAL_STRIP_ROWS } as CSSProperties)
+    ? ({ "--rows-5": STRIP_ROWS, "--rows-6": virtualStripRows(faderH) } as CSSProperties)
     : { gridTemplateRows: STRIP_ROWS };
 
   return (
@@ -83,7 +91,8 @@ function InputStripImpl({ strip: s, onOpenFx, onEditRouting, DevicePicker, onCol
         "@container grid h-full min-w-0 flex-1 rounded-lg border border-line bg-panel transition-colors duration-150 ease-out hover:border-line-strong",
         // Inset ring: the inputs scroller would clip an outside one.
         "focus-visible:outline-offset-[-2px]",
-        Apps && "[grid-template-rows:var(--rows-5)] [&:has(>[data-apps-zone]:not(:empty))]:[grid-template-rows:var(--rows-6)]",
+        Apps &&
+          "[grid-template-rows:var(--rows-5)] [&:has(>[data-apps-zone]:not(:empty))]:[grid-template-rows:var(--rows-6)] [&:has(>[data-apps-zone]:not(:empty))_.apps-handle]:flex",
       )}
       style={gridStyle}
     >
@@ -193,7 +202,23 @@ function InputStripImpl({ strip: s, onOpenFx, onEditRouting, DevicePicker, onCol
       ) : null}
 
       {/* Fader zone (flex): [scale?][fader][meter] · route column */}
-      <div className={cn(zone, "flex items-stretch justify-between gap-1 py-2.5", width < 128 ? "px-[3px]" : "px-2")}>
+      <div className={cn(zone, "relative flex items-stretch justify-between gap-1 py-2.5", width < 128 ? "px-[3px]" : "px-2")}>
+        {Apps ? (
+          // Apps ↕ Fader splitter, on the Apps zone's bottom border; shown only while Apps renders.
+          <Splitter
+            axis="y"
+            ghost
+            label={`Fader height, ${name}`}
+            value={faderH}
+            className="apps-handle absolute inset-x-0 top-[-5px] z-10 hidden h-[9px]"
+            onStart={() => {
+              dragFrom.current = faderH;
+            }}
+            onDrag={(d) => usePanelLayout.getState().setVirtFader(clamp(dragFrom.current - d, STRIP_ZONES.fader, faderMax), false)}
+            onEnd={() => usePanelLayout.getState().persist()}
+            onReset={() => usePanelLayout.getState().setVirtFader(null)}
+          />
+        ) : null}
         <Fader
           value={s.gain}
           onChange={(v) => set(p.gain(), v)}
