@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Mixdeck app icon. Monochrome per PLAN.md §5: no gradients, no glow. -->
+  <rect x="52" y="52" width="920" height="920" rx="200" fill="#111111"/>
+  <rect x="52" y="52" width="920" height="920" rx="200" fill="none" stroke="#333333" stroke-width="8"/>
+  <!-- fader slots -->
+  <g fill="#0A0A0A" stroke="#242424" stroke-width="4">
+    <rect x="276" y="232" width="40" height="560" rx="20"/>
+    <rect x="492" y="232" width="40" height="560" rx="20"/>
+    <rect x="708" y="232" width="40" height="560" rx="20"/>
+  </g>
+  <!-- caps at staggered heights -->
+  <rect x="216" y="560" width="160" height="96" rx="28" fill="#EDEDED"/>
+  <rect x="216" y="602" width="160" height="12" fill="#6B6B6B"/>
+  <rect x="432" y="368" width="160" height="96" rx="28" fill="#FAFAFA"/>
+  <rect x="432" y="410" width="160" height="12" fill="#6B6B6B"/>
+  <rect x="648" y="472" width="160" height="96" rx="28" fill="#EDEDED"/>
+  <rect x="648" y="514" width="160" height="12" fill="#6B6B6B"/>
+</svg>

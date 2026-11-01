@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens.
+ * Raw values live as CSS variables on :root so a light theme is a variable swap;
+ * the Tailwind theme maps onto them (`bg-panel`, `text-text-dim`, `border-line`, ...).
+ */
+:root {
+  --bg: #0a0a0a;
+  --panel: #111111;
+  --panel-2: #171717;
+  --line: #242424;
+  --line-strong: #333333;
+  --text: #ededed;
+  --text-dim: #a1a1a1;
+  --text-faint: #828282; /* was #6b6b6b: 3.4:1 on panel-2; now 4.7:1 (WCAG AA) */
+  --fg: #fafafa;
+  --fg-ink: #0a0a0a;
+  --mute: #e5484d;
+  --solo: #ffb224;
+  --meter-lo: #d4d4d4;
+  --meter-mid: #ffb224;
+  --meter-hi: #e5484d;
+  --meter-off: #1c1c1c;
+
+  /* Boost = set gain > 0 dB; red is "attention", like Mute and clip. */
+  --boost: #e5484d;
+  --boost-ink: #fafafa;
+  --ctl-md: 28px;
+  --ctl-lg: 32px;
+  --strip-min: 108px;
+  --strip-max: 168px;
+  --master-w: clamp(360px, 27vw, 440px);
+
+  --overlay-shadow: 0 0 0 1px var(--line), 0 8px 24px rgb(0 0 0 / 0.5);
+  --titlebar-h: 40px;
+
+  color-scheme: dark;
+}
+
+@theme inline {
+  /* Drop Tailwind's default palette entirely: only our tokens exist (no blue by construction). */
+  --color-*: initial;
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-text: var(--text);
+  --color-text-dim: var(--text-dim);
+  --color-text-faint: var(--text-faint);
+  --color-fg: var(--fg);
+  --color-fg-ink: var(--fg-ink);
+  --color-mute: var(--mute);
+  --color-solo: var(--solo);
+  --color-meter-lo: var(--meter-lo);
+  --color-meter-mid: var(--meter-mid);
+  --color-meter-hi: var(--meter-hi);
+  --color-meter-off: var(--meter-off);
+  --color-boost: var(--boost);
+  --color-boost-ink: var(--boost-ink);
+  --color-black: #000000;
+
+  --font-*: initial;
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* Type scale: 11/12/13/14/16 px only. */
+  --text-*: initial;
+  --text-11: 11px;
+  --text-11--line-height: 16px;
+  --text-12: 12px;
+  --text-12--line-height: 16px;
+  --text-13: 13px;
+  --text-13--line-height: 20px;
+  --text-14: 14px;
+  --text-14--line-height: 20px;
+  --text-14--letter-spacing: -0.01em;
+  --text-16: 16px;
+  --text-16--line-height: 24px;
+  --text-16--letter-spacing: -0.01em;
+
+  /* Radii: 4 (meter segments), 6 (controls, chips), 8 (cards, drawers, dialogs). No larger. */
+  --radius-*: initial;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --shadow-*: initial;
+  --shadow-overlay: var(--overlay-shadow);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow: hidden;
+    user-select: none;
+    cursor: default;
+  }
+
+  /* Monochrome focus ring: 2px text colour with a 2px gap. Never coloured. */
+  :focus-visible {
+    outline: 2px solid var(--text);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  input,
+  textarea,
+  [contenteditable="true"] {
+    user-select: text;
+  }
+
+  ::selection {
+    background: var(--fg);
+    color: var(--fg-ink);
+  }
+
+  /* Thin neutral scrollbars. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+@utility tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Skeleton pulse: opacity only. Disabled under reduced motion. */
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes waiting-bar {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

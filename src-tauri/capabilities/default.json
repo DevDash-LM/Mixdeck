@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Main window: custom title bar, settings, external links, log forwarding, file dialogs for Voicemeeter XML import/export.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-close",
+    "opener:default",
+    "log:default",
+    "dialog:allow-open",
+    "dialog:allow-save"
+  ]
+}
